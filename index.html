@@ -474,6 +474,22 @@ const simuler = (inputs) => {
   );
 };
 
+// Rémunération nette maximale compatible avec le budget (CA − dépenses), charges sociales comprises :
+//  - SARL : R + prévoyance = budget, puis net = R − cotisations TNS − CSG/CRDS
+//  - SASU : coût employeur (brut + cotisations patronales) = budget, puis net payé
+// (au maximum, le résultat avant IS est nul ; l'auto-entrepreneur n'est pas concerné)
+const remunerationNetteMax = (chiffreAffaires, depenses, age) => {
+  const budget = Math.max(0, chiffreAffaires - depenses);
+
+  const budgetSARL = Math.max(0, budget - calculPrevoyance(age));
+  const sarl = Math.max(0, budgetSARL - detailChargesTNS(budgetSARL).total);
+
+  const brut = resoudre((b) => detailSalaireSASU(b).coutEmployeur, budget, budget + 1000);
+  const sasu = budget > 0 ? detailSalaireSASU(brut).netPaye : 0;
+
+  return { sarl, sasu };
+};
+
 
 // ─────────────────────────────────────────────────────────────
 // INTERFACE
@@ -499,17 +515,16 @@ const lireFormulaire = () => ({
 
 const majRemunerationMax = () => {
   const ca = $('chiffreAffaires').value;
-  const dep = $('depenses').value;
   const p = $('remunerationMax');
-  if (ca && dep) {
-    p.textContent = 'Maximum : ' + formatMontant(Math.max(0, Number(ca) - Number(dep)));
+  if (ca) {
+    const max = remunerationNetteMax(Number(ca) || 0, Number($('depenses').value) || 0, Number($('age').value) || 0);
+    p.textContent = 'Maximum, charges sociales comprises : SARL ' + formatMontant(max.sarl) + ' · SASU ' + formatMontant(max.sasu);
     p.classList.remove('hidden');
   } else {
     p.classList.add('hidden');
   }
 };
-$('chiffreAffaires').addEventListener('input', majRemunerationMax);
-$('depenses').addEventListener('input', majRemunerationMax);
+['chiffreAffaires', 'depenses', 'age'].forEach((id) => $(id).addEventListener('input', majRemunerationMax));
 
 const ligne = (libelle, valeur) =>
   `<div class="flex justify-between items-center"><span class="text-gray-600">${libelle}</span><span class="font-medium">${valeur}</span></div>`;
